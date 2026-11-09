@@ -3154,7 +3154,16 @@ class Imputation:
                 return self
 
 
+        class SSSD(BaseImputer):
+            """
+            SSSD Implementation to impute missing values (Structured State Space Diffusion)
+            """
+            algorithm = "sssd"
 
+            def impute(self, user_def=True, params=None, tr_ratio=0.7):
+                from imputegap.algorithms.sssd import sssd
+                self.recov_data = sssd(incomp_data=self.incomp_data, logs=self.logs, verbose=self.verbose)
+                return self
 
     class LLMs:
         """

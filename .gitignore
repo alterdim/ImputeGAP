@@ -29,3 +29,4 @@ imputegap/datasets/test-large.txt
 *imputegap/wrapper/AlgoPython/NuwaTS/data_provider/dataset/ETT-small/ETTh1.csv
 .coveragerc
 ./old_requirements.txt
+*.pyc
