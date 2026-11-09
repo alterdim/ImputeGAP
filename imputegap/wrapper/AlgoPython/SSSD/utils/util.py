@@ -51,12 +51,12 @@ def print_size(net):
 
 # Utilities for diffusion models
 
-def std_normal(size):
+def std_normal(size, device):
     """
     Generate the standard Gaussian variable of a certain size
     """
 
-    return torch.normal(0, 1, size=size).cuda()
+    return torch.normal(0, 1, size=size, device=device)
 
 
 def calc_diffusion_step_embedding(diffusion_steps, diffusion_step_embed_dim_in):
@@ -79,7 +79,7 @@ def calc_diffusion_step_embedding(diffusion_steps, diffusion_step_embed_dim_in):
 
     half_dim = diffusion_step_embed_dim_in // 2
     _embed = np.log(10000) / (half_dim - 1)
-    _embed = torch.exp(torch.arange(half_dim) * -_embed).cuda()
+    _embed = torch.exp(torch.arange(half_dim) * -_embed).to(diffusion_steps.device)
     _embed = diffusion_steps * _embed
     diffusion_step_embed = torch.cat((torch.sin(_embed),
                                       torch.cos(_embed)), 1)
@@ -120,7 +120,7 @@ def calc_diffusion_hyperparams(T, beta_0, beta_T):
 
 
 def sampling(net, size, diffusion_hyperparams, cond, mask, only_generate_missing=0, guidance_weight=0):
-    """
+    r"""
     Perform the complete sampling step according to p(x_0|x_T) = \prod_{t=1}^T p_{\theta}(x_{t-1}|x_t)
 
     Parameters:
@@ -143,18 +143,18 @@ def sampling(net, size, diffusion_hyperparams, cond, mask, only_generate_missing
 
     print('begin sampling, total number of reverse steps = %s' % T)
 
-    x = std_normal(size)
+    x = std_normal(size, cond.device)
 
     with torch.no_grad():
         for t in range(T - 1, -1, -1):
             if only_generate_missing == 1:
                 x = x * (1 - mask).float() + cond * mask.float()
-            diffusion_steps = (t * torch.ones((size[0], 1))).cuda()  # use the corresponding reverse step
+            diffusion_steps = (t * torch.ones((size[0], 1))).to(cond.device)  # use the corresponding reverse step
             epsilon_theta = net((x, cond, mask, diffusion_steps,))  # predict \epsilon according to \epsilon_\theta
             # update x_{t-1} to \mu_\theta(x_t)
             x = (x - (1 - Alpha[t]) / torch.sqrt(1 - Alpha_bar[t]) * epsilon_theta) / torch.sqrt(Alpha[t])
             if t > 0:
-                x = x + Sigma[t] * std_normal(size)  # add the variance term to x_{t-1}
+                x = x + Sigma[t] * std_normal(size, cond.device)  # add the variance term to x_{t-1}
 
     return x
 
@@ -183,9 +183,9 @@ def training_loss(net, loss_fn, X, diffusion_hyperparams, only_generate_missing=
     loss_mask = X[3]
 
     B, C, L = audio.shape  # B is batchsize, C=1, L is audio length
-    diffusion_steps = torch.randint(T, size=(B, 1, 1)).cuda()  # randomly sample diffusion steps from 1~T
+    diffusion_steps = torch.randint(T, size=(B, 1, 1)).to(audio.device)  # randomly sample diffusion steps from 1~T
 
-    z = std_normal(audio.shape)
+    z = std_normal(audio.shape, audio.device)
     if only_generate_missing == 1:
         z = audio * mask.float() + z * (1 - mask).float()
     transformed_X = torch.sqrt(Alpha_bar[diffusion_steps]) * audio + torch.sqrt(
